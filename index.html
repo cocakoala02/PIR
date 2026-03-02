@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>医疗隐私 PIR 演示</title>
+  <style>
+    :root {
+      --bg: #f3f7fb;
+      --card: #ffffff;
+      --ink: #16202a;
+      --sub: #4f657a;
+      --accent: #0a6fb7;
+      --accent-2: #0e8f74;
+      --line: #d6e2ee;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% 15%, #d8ebff 0%, transparent 30%),
+        radial-gradient(circle at 85% 5%, #d2f4ea 0%, transparent 26%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 42px auto;
+      padding: 0 18px;
+    }
+
+    .head {
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.4px;
+    }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--sub);
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 6px 20px rgba(9, 29, 49, 0.06);
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--sub);
+    }
+
+    select, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      font-size: 14px;
+    }
+
+    button {
+      margin-top: 8px;
+      color: #fff;
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--sub);
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .result {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #c8e8df;
+      background: #ecfbf5;
+      color: #184d40;
+      min-height: 46px;
+      line-height: 1.5;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #264861;
+      font-size: 13px;
+      line-height: 1.45;
+      max-height: 210px;
+      overflow-y: auto;
+    }
+
+    .warn {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #6b7f90;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 760px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+      .wrap {
+        margin: 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="head">
+      <h1>罕见病靶向药隐匿查询（PIR 教学演示）</h1>
+      <p class="sub">
+        用户在本地将疾病索引加密后提交；服务端仅执行同态计算并返回加密结果，
+        无法从查询日志直接还原具体疾病。
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>1) 客户端隐匿查询</h2>
+        <label for="diseaseSelect">选择疾病代码</label>
+        <select id="diseaseSelect"></select>
+
+        <div class="row">
+          <button id="keyBtn">生成本地密钥</button>
+          <button id="queryBtn" disabled>执行 PIR 查询</button>
+        </div>
+
+        <div id="status" class="status">系统初始化中...</div>
+        <div id="result" class="result">暂无查询结果</div>
+        <div class="warn">
+          注：这是课程演示版 Paillier PIR，参数较小，仅用于展示“查询索引加密 + 服务端不可见”的核心流程。
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>2) 服务端后台日志（演示）</h2>
+        <ul id="logs"></ul>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      catalog: null,
+      keypair: null
+    };
+
+    const PRIME_POOL = [
+      1000003n, 1000033n, 1000037n, 1000039n, 1000081n, 1000099n,
+      1000117n, 1000121n, 1000133n, 1000151n, 1000159n, 1000171n,
+      1000183n, 1000187n, 1000193n, 1000199n, 1000211n, 1000213n
+    ];
+
+    const els = {
+      diseaseSelect: document.getElementById('diseaseSelect'),
+      keyBtn: document.getElementById('keyBtn'),
+      queryBtn: document.getElementById('queryBtn'),
+      status: document.getElementById('status'),
+      result: document.getElementById('result'),
+      logs: document.getElementById('logs')
+    };
+
+    function setStatus(msg) {
+      els.status.textContent = msg;
+    }
+
+    function gcd(a, b) {
+      let x = a;
+      let y = b;
+      while (y !== 0n) {
+        const t = x % y;
+        x = y;
+        y = t;
+      }
+      return x;
+    }
+
+    function lcm(a, b) {
+      return (a * b) / gcd(a, b);
+    }
+
+    function modPow(base, exp, mod) {
+      let result = 1n;
+      let b = ((base % mod) + mod) % mod;
+      let e = exp;
+      while (e > 0n) {
+        if (e & 1n) {
+          result = (result * b) % mod;
+        }
+        b = (b * b) % mod;
+        e >>= 1n;
+      }
+      return result;
+    }
+
+    function egcd(a, b) {
+      if (b === 0n) {
+        return { g: a, x: 1n, y: 0n };
+      }
+      const next = egcd(b, a % b);
+      return { g: next.g, x: next.y, y: next.x - (a / b) * next.y };
+    }
+
+    function modInverse(a, m) {
+      const res = egcd(a, m);
+      if (res.g !== 1n && res.g !== -1n) {
+        throw new Error('模逆不存在');
+      }
+      return ((res.x % m) + m) % m;
+    }
+
+    function randomBigIntBelow(n) {
+      const bitLen = n.toString(2).length;
+      const byteLen = Math.ceil(bitLen / 8);
+      while (true) {
+        const arr = new Uint8Array(byteLen);
+        crypto.getRandomValues(arr);
+        let x = 0n;
+        for (const b of arr) {
+          x = (x << 8n) + BigInt(b);
+        }
+        if (x > 0n && x < n) {
+          return x;
+        }
+      }
+    }
+
+    function randomCoprime(n) {
+      while (true) {
+        const r = randomBigIntBelow(n);
+        if (gcd(r, n) === 1n) {
+          return r;
+        }
+      }
+    }
+
+    function chooseTwoPrimes() {
+      const i = Math.floor(Math.random() * PRIME_POOL.length);
+      let j = Math.floor(Math.random() * PRIME_POOL.length);
+      while (j === i) {
+        j = Math.floor(Math.random() * PRIME_POOL.length);
+      }
+      return [PRIME_POOL[i], PRIME_POOL[j]];
+    }
+
+    function generatePaillierKeypair() {
+      const [p, q] = chooseTwoPrimes();
+      const n = p * q;
+      const n2 = n * n;
+      const g = n + 1n;
+      const lambda = lcm(p - 1n, q - 1n);
+      const u = modPow(g, lambda, n2);
+      const l = (u - 1n) / n;
+      const mu = modInverse(l, n);
+
+      return {
+        publicKey: { n, g },
+        privateKey: { lambda, mu, n }
+      };
+    }
+
+    function paillierEncrypt(m, publicKey) {
+      const { n, g } = publicKey;
+      const n2 = n * n;
+      const r = randomCoprime(n);
+      const c1 = modPow(g, m, n2);
+      const c2 = modPow(r, n, n2);
+      return (c1 * c2) % n2;
+    }
+
+    function paillierDecrypt(c, privateKey) {
+      const { lambda, mu, n } = privateKey;
+      const n2 = n * n;
+      const u = modPow(c, lambda, n2);
+      const l = (u - 1n) / n;
+      return (l * mu) % n;
+    }
+
+    function buildEncryptedSelector(selectedIndex, total, publicKey) {
+      const selector = [];
+      for (let i = 0; i < total; i += 1) {
+        const bit = i === selectedIndex ? 1n : 0n;
+        selector.push(paillierEncrypt(bit, publicKey).toString());
+      }
+      return selector;
+    }
+
+    async function loadCatalog() {
+      const res = await fetch('/api/catalog');
+      if (!res.ok) {
+        throw new Error('无法加载疾病目录');
+      }
+      const data = await res.json();
+      state.catalog = data;
+
+      els.diseaseSelect.innerHTML = '';
+      data.diseaseCodes.forEach((item, idx) => {
+        const op = document.createElement('option');
+        op.value = String(idx);
+        op.textContent = item.display;
+        els.diseaseSelect.appendChild(op);
+      });
+    }
+
+    async function refreshLogs() {
+      const res = await fetch('/api/logs');
+      if (!res.ok) {
+        return;
+      }
+      const data = await res.json();
+      els.logs.innerHTML = '';
+      if (!data.logs.length) {
+        const li = document.createElement('li');
+        li.textContent = '暂无日志';
+        els.logs.appendChild(li);
+        return;
+      }
+      data.logs.slice().reverse().forEach((line) => {
+        const li = document.createElement('li');
+        li.textContent = line;
+        els.logs.appendChild(li);
+      });
+    }
+
+    async function runPirQuery() {
+      if (!state.keypair || !state.catalog) {
+        setStatus('请先初始化目录并生成本地密钥。');
+        return;
+      }
+
+      const selectedIndex = Number(els.diseaseSelect.value);
+      if (Number.isNaN(selectedIndex)) {
+        setStatus('请选择疾病代码。');
+        return;
+      }
+
+      try {
+        setStatus('正在本地构造 one-hot 查询并逐项加密...');
+        const encryptedSelector = buildEncryptedSelector(
+          selectedIndex,
+          state.catalog.diseaseCodes.length,
+          state.keypair.publicKey
+        );
+
+        setStatus('已发送加密索引到服务端，等待同态聚合结果...');
+        const res = await fetch('/api/pir-query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            publicKey: {
+              n: state.keypair.publicKey.n.toString(),
+              g: state.keypair.publicKey.g.toString()
+            },
+            encryptedSelector
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || '服务端返回失败');
+        }
+
+        const plainTherapyId = paillierDecrypt(BigInt(data.encryptedAnswer), state.keypair.privateKey);
+        const therapy = state.catalog.treatments[String(plainTherapyId)] || '未命中治疗方案';
+
+        els.result.textContent = `治疗建议：${therapy}`;
+        setStatus(`查询完成。服务端提示：${data.serverMessage}`);
+        await refreshLogs();
+      } catch (error) {
+        setStatus(`查询失败：${error.message}`);
+      }
+    }
+
+    function bindEvents() {
+      els.keyBtn.addEventListener('click', () => {
+        try {
+          state.keypair = generatePaillierKeypair();
+          els.queryBtn.disabled = false;
+          setStatus('本地密钥生成成功。可以执行 PIR 查询。');
+        } catch (error) {
+          setStatus(`密钥生成失败：${error.message}`);
+        }
+      });
+
+      els.queryBtn.addEventListener('click', runPirQuery);
+    }
+
+    async function init() {
+      try {
+        await loadCatalog();
+        bindEvents();
+        await refreshLogs();
+        setStatus('初始化完成。请先点击“生成本地密钥”。');
+      } catch (error) {
+        setStatus(`初始化失败：${error.message}`);
+      }
+    }
+
+    init();
+    setInterval(refreshLogs, 5000);
+  </script>
+</body>
+</html>
