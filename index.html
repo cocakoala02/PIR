@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>医疗隐私 PIR 演示</title>
+  <title>医疗隐私 PIR 系统</title>
   <style>
     :root {
       --bg: #f3f7fb;
@@ -153,7 +153,7 @@
 <body>
   <main class="wrap">
     <section class="head">
-      <h1>罕见病靶向药隐匿查询（PIR 教学演示）</h1>
+      <h1>罕见病靶向药隐匿查询（PIR 隐私查询）</h1>
       <p class="sub">
         用户在本地将疾病索引加密后提交；服务端仅执行同态计算并返回加密结果，
         无法从查询日志直接还原具体疾病。
@@ -174,12 +174,12 @@
         <div id="status" class="status">系统初始化中...</div>
         <div id="result" class="result">暂无查询结果</div>
         <div class="warn">
-          注：这是课程演示版 Paillier PIR，参数较小，仅用于展示“查询索引加密 + 服务端不可见”的核心流程。
+          注：这是简化版 Paillier PIR，参数较小，仅用于说明“查询索引加密 + 服务端不可见”的核心流程。
         </div>
       </article>
 
       <article class="card">
-        <h2>2) 服务端后台日志（演示）</h2>
+        <h2>2) 服务端后台日志</h2>
         <ul id="logs"></ul>
       </article>
     </section>
